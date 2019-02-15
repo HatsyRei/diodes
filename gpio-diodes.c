@@ -30,6 +30,7 @@
 #include <linux/of_device.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/bitops.h>types
 
 
 static const struct i2c_device_id pcf857x_id[] = {
@@ -88,32 +89,42 @@ struct pcf857x {
 	struct gpio_chip	chip;
 	struct i2c_client	*client;
 	struct mutex		lock;		/* protect 'out' */
-	unsigned long long		out;		/* software latch */
-	unsigned long long		status;		/* current status */
+	u64		out;		/* software latch */
+	u64		status;		/* current status */
 	unsigned int		irq_parent;
-	unsigned		irq_enabled;	/* enabled irqs */
+	u64		irq_enabled;	/* enabled irqs */
 
-	long long int (*write)(struct i2c_client *client, unsigned long long data);
-	long long int (*read)(struct i2c_client *client);
+	int (*write)(struct i2c_client *client, u64 data);
+	int (*read)(struct i2c_client *client, u64 *data);
 };
 
 /*-------------------------------------------------------------------------*/
 
 /* Talk to 8-bit I/O expander */
 
-static long long int i2c_write_le8(struct i2c_client *client, unsigned long long data)
+static int i2c_write_le8(struct i2c_client *client, u64 data)
 {
-	return (long long int)i2c_smbus_write_byte(client, data);
+	return (int)i2c_smbus_write_byte(client, data);
 }
 
-static long long int i2c_read_le8(struct i2c_client *client)
+static int i2c_read_le8(struct i2c_client *client, u64 *data)
 {
-	return (long long int)i2c_smbus_read_byte(client);
+	u8 buf[1];
+	int status;
+
+	status = i2c_master_recv(client, buf, 1);
+
+	if(status < 0)
+		return status;
+
+	*data = buf[0];
+
+	return status;
 }
 
 /* Talk to 16-bit I/O expander */
 
-static long long int i2c_write_le16(struct i2c_client *client, unsigned long long word)
+static int i2c_write_le16(struct i2c_client *client, u64 word)
 {
 	u8 buf[2] = { word & 0xff, word >> 8, };
 	int status;
@@ -122,7 +133,7 @@ static long long int i2c_write_le16(struct i2c_client *client, unsigned long lon
 	return (status < 0) ? status : 0;
 }
 
-static long long int i2c_read_le16(struct i2c_client *client)
+static int i2c_read_le16(struct i2c_client *client, u64 *data)
 {
 	u8 buf[2];
 	int status;
@@ -130,12 +141,15 @@ static long long int i2c_read_le16(struct i2c_client *client)
 	status = i2c_master_recv(client, buf, 2);
 	if (status < 0)
 		return status;
-	return (buf[1] << 8) | buf[0];
+
+	*data = (buf[1] << 8) | buf[0];
+
+	return status;
 }
 
 /* Talk to 48-bit I/O expander */
 
-static long long int i2c_write_le48(struct i2c_client *client, unsigned long long word)
+static int i2c_write_le48(struct i2c_client *client, u64 word)
 {
 	u8 buf[6] = { word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff, (word >> 24) & 0xff, (word >> 32) & 0xff,  (word >> 40) & 0xff, };
 	int status;
@@ -144,7 +158,7 @@ static long long int i2c_write_le48(struct i2c_client *client, unsigned long lon
 	return (status < 0) ? status : 0;
 }
 
-static long long int i2c_read_le48(struct i2c_client *client)
+static int i2c_read_le48(struct i2c_client *client, u64 *data)
 {
 	u8 buf[6];
 	int status;
@@ -152,7 +166,15 @@ static long long int i2c_read_le48(struct i2c_client *client)
 	status = i2c_master_recv(client, buf, 6);
 	if (status < 0)
 		return status;
-	return (buf[5] << 40) | (buf[4] << 32) | (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
+
+#ifdef DEBUG
+	*data = 0;
+	pr_info("i2c_read_le48 %6ph\n", buf);
+#endif
+
+	*data = ((u64)buf[5] << 40) | ((u64)buf[4] << 32) | ((u64)buf[3] << 24) | ((u64)buf[2] << 16) | ((u64)buf[1] << 8) | (u64)buf[0];
+
+	return status;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -160,10 +182,10 @@ static long long int i2c_read_le48(struct i2c_client *client)
 static int pcf857x_input(struct gpio_chip *chip, unsigned offset)
 {
 	struct pcf857x	*gpio = gpiochip_get_data(chip);
-	long long int		status;
+	int		status;
 
 	mutex_lock(&gpio->lock);
-	gpio->out |= (1 << offset);
+	gpio->out |= (1ULL << offset);
 	status = gpio->write(gpio->client, gpio->out);
 	mutex_unlock(&gpio->lock);
 
@@ -173,16 +195,18 @@ static int pcf857x_input(struct gpio_chip *chip, unsigned offset)
 static int pcf857x_get(struct gpio_chip *chip, unsigned offset)
 {
 	struct pcf857x	*gpio = gpiochip_get_data(chip);
-	long long int		value;
+	u64		value;
+	int		status;
 
-	value = gpio->read(gpio->client);
-	return (value < 0) ? value : !!(value & (1 << offset));
+	status = gpio->read(gpio->client, &value);
+
+	return (status < 0) ? status : !!(value & (1ULL << offset));
 }
 
 static int pcf857x_output(struct gpio_chip *chip, unsigned offset, int value)
 {
 	struct pcf857x	*gpio = gpiochip_get_data(chip);
-	unsigned long long	bit = 1 << offset;
+	u64	bit = 1ULL << offset;
 	int		status;
 
 	mutex_lock(&gpio->lock);
@@ -206,17 +230,17 @@ static void pcf857x_set(struct gpio_chip *chip, unsigned offset, int value)
 static irqreturn_t pcf857x_irq(int irq, void *data)
 {
 	struct pcf857x  *gpio = data;
-	unsigned long change, i, status;
+	u64 change, i, status, value;
 
-	status = gpio->read(gpio->client);
+	status = gpio->read(gpio->client, &value);
 
 	/*
 	 * call the interrupt handler iff gpio is used as
 	 * interrupt source, just to avoid bad irqs
 	 */
 	mutex_lock(&gpio->lock);
-	change = (gpio->status ^ status) & gpio->irq_enabled;
-	gpio->status = status;
+	change = (gpio->status ^ value) & gpio->irq_enabled;
+	gpio->status = value;
 	mutex_unlock(&gpio->lock);
 
 	for_each_set_bit(i, &change, gpio->chip.ngpio)
@@ -252,14 +276,14 @@ static void pcf857x_irq_enable(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
 
-	gpio->irq_enabled |= (1 << data->hwirq);
+	gpio->irq_enabled |= (1ULL << data->hwirq);
 }
 
 static void pcf857x_irq_disable(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
 
-	gpio->irq_enabled &= ~(1 << data->hwirq);
+	gpio->irq_enabled &= ~(1ULL << data->hwirq);
 }
 
 static void pcf857x_irq_bus_lock(struct irq_data *data)
@@ -298,6 +322,7 @@ static int pcf857x_probe(struct i2c_client *client,
 	struct pcf857x			*gpio;
 	unsigned int			n_latch = 0;
 	int				status;
+	u64 value;
 
 	if (IS_ENABLED(CONFIG_OF) && np)
 		of_property_read_u32(np, "lines-initial-states", &n_latch);
@@ -361,7 +386,7 @@ static int pcf857x_probe(struct i2c_client *client,
 
 		/* fail if there's no chip present */
 		else
-			status = i2c_read_le16(client);
+			status = i2c_read_le16(client, &value);
 	} else if (gpio->chip.ngpio == 48) {
 		gpio->write	= i2c_write_le48;
 		gpio->read	= i2c_read_le48;
@@ -371,7 +396,7 @@ static int pcf857x_probe(struct i2c_client *client,
 
 		/* fail if there's no chip present */
 		else
-			status = i2c_read_le48(client);
+			status = i2c_read_le48(client, &value);
 
 	} else {
 		dev_dbg(&client->dev, "unsupported number of gpios\n");
@@ -381,7 +406,8 @@ static int pcf857x_probe(struct i2c_client *client,
 	if (status < 0)
 		goto fail;
 
-	gpio->chip.label = client->name;
+	if(of_property_read_string(np, "label", &gpio->chip.label))
+		gpio->chip.label = client->name;
 
 	gpio->client = client;
 	i2c_set_clientdata(client, gpio);
