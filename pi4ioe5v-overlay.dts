@@ -1,0 +1,33 @@
+// Definitions for MPU6050
+/dts-v1/;
+/plugin/;
+
+/ {
+        compatible = "brcm,bcm2837";
+
+        fragment@0 {
+                target = <&i2c1>;
+                __overlay__ {
+                        #address-cells = <1>;
+                        #size-cells = <0>;
+                        status = "okay";
+                        clock-frequency = <400000>;
+
+                        pi4ioe5v: pi4ioe5v@70 {
+                              compatible = "diodes,pi4ioe5v96248";
+                              reg = <0x70>;
+                              interrupt-parent = <&gpio>;
+                              interrupts = <4 8>; // active low level-sensitive
+                              gpio-controller;
+                              #gpio-cells = <2>;
+                              npgio=<48>;
+                        };
+                };
+        };
+
+        __overrides__ {
+                addr = <&pi4ioe5v>,"reg:0";
+                interrupt = <&pi4ioe5v>,"interrupts:0";
+                label = <&pi4ioe5v>,"label";
+        };
+};
