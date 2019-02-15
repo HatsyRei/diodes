@@ -30,7 +30,7 @@
 #include <linux/of_device.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
-#include <linux/bitops.h>types
+#include <linux/bitops.h>
 
 
 static const struct i2c_device_id pcf857x_id[] = {
@@ -230,7 +230,9 @@ static void pcf857x_set(struct gpio_chip *chip, unsigned offset, int value)
 static irqreturn_t pcf857x_irq(int irq, void *data)
 {
 	struct pcf857x  *gpio = data;
-	u64 change, i, status, value;
+	u64 value;
+	unsigned long change;
+	int status, i;
 
 	status = gpio->read(gpio->client, &value);
 
