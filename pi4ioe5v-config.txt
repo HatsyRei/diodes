@@ -1,0 +1,6 @@
+dtoverlay=pi4ioe5v:addr=0x10,interrupt=15,label=GR1
+dtoverlay=pi4ioe5v:addr=0x11,interrupt=18,label=GR2
+dtoverlay=pi4ioe5v:addr=0x12,interrupt=23,label=GR3
+dtoverlay=pi4ioe5v:addr=0x13,interrupt=24,label=GR4
+dtoverlay=pi4ioe5v:addr=0x14,interrupt=25,label=GR5
+dtoverlay=pi4ioe5v:addr=0x15,interrupt=26,label=GR6
