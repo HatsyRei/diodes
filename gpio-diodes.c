@@ -18,7 +18,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <linux/gpio.h>
+#include <linux/gpio/driver.h>
 #include <linux/i2c.h>
 #include <linux/platform_data/pcf857x.h>
 #include <linux/interrupt.h>
@@ -89,10 +89,10 @@ struct pcf857x {
 	struct gpio_chip	chip;
 	struct i2c_client	*client;
 	struct mutex		lock;		/* protect 'out' */
-	u64		out;		/* software latch */
-	u64		status;		/* current status */
+	u64			out;		/* software latch */
+	u64			status;		/* current status */
 	unsigned int		irq_parent;
-	u64		irq_enabled;	/* enabled irqs */
+	u64			irq_enabled;	/* enabled irqs */
 
 	int (*write)(struct i2c_client *client, u64 data);
 	int (*read)(struct i2c_client *client, u64 *data);
@@ -166,11 +166,6 @@ static int i2c_read_le48(struct i2c_client *client, u64 *data)
 	status = i2c_master_recv(client, buf, 6);
 	if (status < 0)
 		return status;
-
-#ifdef DEBUG
-	*data = 0;
-	pr_info("i2c_read_le48 %6ph\n", buf);
-#endif
 
 	*data = ((u64)buf[5] << 40) | ((u64)buf[4] << 32) | ((u64)buf[3] << 24) | ((u64)buf[2] << 16) | ((u64)buf[1] << 8) | (u64)buf[0];
 
@@ -246,7 +241,7 @@ static irqreturn_t pcf857x_irq(int irq, void *data)
 	mutex_unlock(&gpio->lock);
 
 	for_each_set_bit(i, &change, gpio->chip.ngpio)
-		handle_nested_irq(irq_find_mapping(gpio->chip.irqdomain, i));
+		handle_nested_irq(irq_find_mapping(gpio->chip.irq.domain, i));
 
 	return IRQ_HANDLED;
 }
