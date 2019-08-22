@@ -13,15 +13,23 @@ else
 
 KDIR ?= /lib/modules/$$(uname -r)/build
 CC = $(CROSS_COMPILE)gcc
+DTC ?= dtc
 
-module:
+gpio-diodes.ko:
 	$(MAKE) -C $(KDIR) M=$$PWD modules
+
+all: 	module \
+	pi4ioe5v-overlay.dtbo
+
+.PHONY : module clean
+
+module: gpio-diodes.ko
 
 clean:
 	$(MAKE) -C $(KDIR) M=$$PWD clean
 	rm -f $(usr)
 
-all: module
+pi4ioe5v-overlay.dtbo:	pi4ioe5v-overlay.dts
+	$(DTC) -O dtb -o pi4ioe5v-overlay.dtbo -b 0 -@ pi4ioe5v-overlay.dts
 
-.PHONY : clean
 endif
