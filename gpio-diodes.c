@@ -151,7 +151,7 @@ static int i2c_read_le16(struct i2c_client *client, u64 *data)
 
 static int i2c_write_le48(struct i2c_client *client, u64 word)
 {
-	u8 buf[6] = { word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff, (word >> 24) & 0xff, (word >> 32) & 0xff,  (word >> 40) & 0xff, };
+	u8 buf[6] = { word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff, (word >> 24) & 0xff, (word >> 32) & 0xff, (word >> 40) & 0xff, };
 	int status;
 
 	status = i2c_master_send(client, buf, 6);
