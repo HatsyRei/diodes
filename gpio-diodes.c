@@ -1,21 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Driver for pcf857x, pca857x, and pca967x I2C GPIO expanders
  *
  * Copyright (C) 2007 David Brownell
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/gpio/driver.h>
@@ -104,7 +91,7 @@ struct pcf857x {
 
 static int i2c_write_le8(struct i2c_client *client, u64 data)
 {
-	return (int)i2c_smbus_write_byte(client, data);
+	return i2c_smbus_write_byte(client, data);
 }
 
 static int i2c_read_le8(struct i2c_client *client, u64 *data)
@@ -118,7 +105,6 @@ static int i2c_read_le8(struct i2c_client *client, u64 *data)
 		return status;
 
 	*data = buf[0];
-
 	return status;
 }
 
@@ -143,7 +129,6 @@ static int i2c_read_le16(struct i2c_client *client, u64 *data)
 		return status;
 
 	*data = (buf[1] << 8) | buf[0];
-
 	return status;
 }
 
@@ -168,7 +153,6 @@ static int i2c_read_le48(struct i2c_client *client, u64 *data)
 		return status;
 
 	*data = ((u64)buf[5] << 40) | ((u64)buf[4] << 32) | ((u64)buf[3] << 24) | ((u64)buf[2] << 16) | ((u64)buf[1] << 8) | (u64)buf[0];
-
 	return status;
 }
 
@@ -194,7 +178,6 @@ static int pcf857x_get(struct gpio_chip *chip, unsigned offset)
 	int		status;
 
 	status = gpio->read(gpio->client, &value);
-
 	return (status < 0) ? status : !!(value & (1ULL << offset));
 }
 
@@ -254,35 +237,30 @@ static void noop(struct irq_data *data) { }
 static int pcf857x_irq_set_wake(struct irq_data *data, unsigned int on)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
-
 	return irq_set_irq_wake(gpio->client->irq, on);
 }
 
 static void pcf857x_irq_enable(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
-
 	gpio->irq_enabled |= (1ULL << data->hwirq);
 }
 
 static void pcf857x_irq_disable(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
-
 	gpio->irq_enabled &= ~(1ULL << data->hwirq);
 }
 
 static void pcf857x_irq_bus_lock(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
-
 	mutex_lock(&gpio->lock);
 }
 
 static void pcf857x_irq_bus_sync_unlock(struct irq_data *data)
 {
 	struct pcf857x *gpio = irq_data_get_irq_chip_data(data);
-
 	mutex_unlock(&gpio->lock);
 }
 
@@ -294,12 +272,12 @@ static int pcf857x_probe(struct i2c_client *client,
 	struct pcf857x_platform_data	*pdata = dev_get_platdata(&client->dev);
 	struct device_node		*np = client->dev.of_node;
 	struct pcf857x			*gpio;
-	unsigned int			n_latch = 0;
+	u64				n_latch = 0;
 	int				status;
 	u64 value;
 
 	if (IS_ENABLED(CONFIG_OF) && np)
-		of_property_read_u32(np, "lines-initial-states", &n_latch);
+		of_property_read_u64(np, "lines-initial-states", &n_latch);
 	else if (pdata)
 		n_latch = pdata->n_latch;
 	else
@@ -402,7 +380,7 @@ static int pcf857x_probe(struct i2c_client *client,
 	 * reset state.  Otherwise it flags pins to be driven low.
 	 */
 	gpio->out = ~n_latch;
-	gpio->status = gpio->out;
+	gpio->status = gpio->read(gpio->client);
 
 	status = devm_gpiochip_add_data(&client->dev, &gpio->chip, gpio);
 	if (status < 0)
