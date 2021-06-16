@@ -209,7 +209,7 @@ static irqreturn_t pcf857x_irq(int irq, void *data)
 {
 	struct pcf857x  *gpio = data;
 	u64 value;
-	unsigned long change;
+	unsigned long change; // unsigned long is 8 bytes wide on ARM64
 	int status, i;
 
 	status = gpio->read(gpio->client, &value);
