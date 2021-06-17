@@ -273,11 +273,19 @@ static int pcf857x_probe(struct i2c_client *client,
 	struct device_node		*np = client->dev.of_node;
 	struct pcf857x			*gpio;
 	u64				n_latch = 0;
+	u32				t_latch = 0;
 	int				status;
 	u64 value;
 
 	if (IS_ENABLED(CONFIG_OF) && np)
-		of_property_read_u64(np, "lines-initial-states", &n_latch);
+		// Read 64-bit value if expected lines-initial-states property is beyond 32-bit
+		if (gpio->chip.ngpio == 48)
+			of_property_read_u64(np, "lines-initial-states", &n_latch);
+		// else read 32-bit value into temp latch and assign to n_latch
+		else {
+			of_property_read_u32(np, "lines-initial-states", &t_latch);
+			n_latch = t_latch;
+		}
 	else if (pdata)
 		n_latch = pdata->n_latch;
 	else
