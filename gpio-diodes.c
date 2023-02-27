@@ -393,6 +393,7 @@ static int pcf857x_probe(struct i2c_client *client,
 	/* Enable irqchip if we have an interrupt */
 	if (client->irq) {
 		struct gpio_irq_chip *girq;
+
 		gpio->irqchip.name = "pcf857x";
 		gpio->irqchip.irq_enable = pcf857x_irq_enable;
 		gpio->irqchip.irq_disable = pcf857x_irq_disable;
